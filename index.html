@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Universe Monitor — Live Global Intelligence, Free Forever | by AI Humane</title>
+    <meta
+      name="description"
+      content="Universe Monitor by AI Humane: a free, real-time global intelligence dashboard. Live earthquakes, natural events, conflict signals, world news, markets, crypto and FX — one screen, no sign-in, no paywall."
+    />
+    <meta name="keywords" content="global intelligence dashboard, OSINT, live earthquakes, world news, conflict monitor, markets, free intelligence platform, AI Humane, Universe Monitor" />
+    <meta name="author" content="AI Humane Technologies Pvt Ltd" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="Universe Monitor — Live Global Intelligence, Free Forever" />
+    <meta property="og:description" content="The whole planet, one screen. Live earthquakes, natural events, conflict signals, news, markets and FX. No sign-in. No paywall. By AI Humane." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://aihumane.in/assets/og-master-plan.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#07090f" />
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="preconnect" href="https://api.fontshare.com" />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@700,800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Universe Monitor",
+        "applicationCategory": "News & Intelligence Dashboard",
+        "operatingSystem": "Web",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "creator": { "@type": "Organization", "name": "AI Humane Technologies Pvt Ltd", "url": "https://aihumane.in" }
+      }
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <img src="assets/mark.png" width="34" height="34" alt="" />
+        <span class="brand-name">UNIVERSE&nbsp;MONITOR</span>
+        <span class="brand-by">by <a href="https://aihumane.in" target="_blank" rel="noopener">AI&nbsp;HUMANE</a></span>
+      </div>
+      <div class="topbar-status" aria-live="polite">
+        <span class="pulse" aria-hidden="true"></span>
+        <span data-utc-clock>--:--:-- UTC</span>
+        <span class="sep">·</span>
+        <span data-refresh-status>booting</span>
+      </div>
+    </header>
+
+    <section class="statbar" aria-label="Platform facts">
+      <div><strong data-stat-signals>—</strong><span>live signals on screen</span></div>
+      <div><strong>10+</strong><span>public data sources</span></div>
+      <div><strong>60s</strong><span>fastest refresh cycle</span></div>
+      <div><strong>$0</strong><span>free forever · no sign-in</span></div>
+    </section>
+
+    <main class="grid" id="main">
+      <!-- ══════════ MAP ══════════ -->
+      <section class="panel panel-map" aria-labelledby="map-title">
+        <header class="panel-head">
+          <h2 id="map-title">Live planet</h2>
+          <div class="layer-toggles" role="group" aria-label="Map layers">
+            <button class="chip is-on" data-layer="quakes">Earthquakes</button>
+            <button class="chip is-on" data-layer="events">Natural events</button>
+            <button class="chip is-on" data-layer="unrest">Unrest signals</button>
+          </div>
+        </header>
+        <div id="map" role="application" aria-label="World map with live event layers"></div>
+        <footer class="panel-foot" data-map-status>loading layers…</footer>
+      </section>
+
+      <!-- ══════════ HEADLINES ══════════ -->
+      <section class="panel panel-news" aria-labelledby="news-title">
+        <header class="panel-head">
+          <h2 id="news-title">Global wire</h2>
+          <div class="layer-toggles" role="group" aria-label="News themes">
+            <button class="chip is-on" data-theme="geopolitics">Geopolitics</button>
+            <button class="chip" data-theme="markets">Markets</button>
+            <button class="chip" data-theme="energy">Energy</button>
+            <button class="chip" data-theme="ai">AI &amp; tech</button>
+          </div>
+        </header>
+        <ol class="news-list" data-news-list aria-live="polite">
+          <li class="placeholder">Tuning the wire…</li>
+        </ol>
+        <footer class="panel-foot" data-news-status>—</footer>
+      </section>
+
+      <!-- ══════════ MARKETS ══════════ -->
+      <section class="panel panel-markets" aria-labelledby="mkt-title">
+        <header class="panel-head"><h2 id="mkt-title">Market pulse</h2></header>
+        <div class="quote-grid" data-indices>
+          <div class="placeholder">Reading the tape…</div>
+        </div>
+        <h3 class="subhead">Top assets · 24h</h3>
+        <div class="quote-grid" data-commodities></div>
+        <footer class="panel-foot" data-mkt-status>—</footer>
+      </section>
+
+      <!-- ══════════ CRYPTO + FX ══════════ -->
+      <section class="panel panel-money" aria-labelledby="money-title">
+        <header class="panel-head"><h2 id="money-title">Crypto &amp; FX</h2></header>
+        <div class="quote-grid" data-crypto>
+          <div class="placeholder">Loading crypto…</div>
+        </div>
+        <h3 class="subhead">US dollar vs</h3>
+        <div class="quote-grid" data-fx></div>
+        <footer class="panel-foot" data-money-status>—</footer>
+      </section>
+
+      <!-- ══════════ SEISMIC ══════════ -->
+      <section class="panel panel-quakes" aria-labelledby="quake-title">
+        <header class="panel-head"><h2 id="quake-title">Seismic — last 24h</h2></header>
+        <ol class="event-list" data-quake-list>
+          <li class="placeholder">Listening to the ground…</li>
+        </ol>
+        <footer class="panel-foot" data-quake-status>—</footer>
+      </section>
+
+      <!-- ══════════ NATURAL EVENTS ══════════ -->
+      <section class="panel panel-events" aria-labelledby="event-title">
+        <header class="panel-head"><h2 id="event-title">Natural events — open now</h2></header>
+        <ol class="event-list" data-event-list>
+          <li class="placeholder">Scanning satellites…</li>
+        </ol>
+        <footer class="panel-foot" data-event-status>—</footer>
+      </section>
+    </main>
+
+    <footer class="site-foot">
+      <p>
+        <strong>Universe Monitor</strong> is a free, open-access intelligence dashboard by
+        <a href="https://aihumane.in" target="_blank" rel="noopener">AI Humane Technologies</a> —
+        Phase 3 of the <a href="https://aihumane.in/plan/" target="_blank" rel="noopener">master plan</a> is one reasoning engine over all unstructured data. This is the public taste of it.
+      </p>
+      <p class="foot-sources">
+        Data: USGS · NASA EONET · GDELT · CoinGecko · Frankfurter (ECB) · basemap © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, tiles © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>.
+        Signals are indicative, minutes-delayed, and not advice.
+      </p>
+    </footer>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="app.js" defer></script>
+  </body>
+</html>
