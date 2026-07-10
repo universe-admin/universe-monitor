@@ -18,12 +18,30 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#07090f" />
     <link rel="icon" type="image/png" href="assets/favicon.png" />
-    <link rel="preconnect" href="https://api.fontshare.com" />
-    <link
-      href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@700,800&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+
+    <!-- Warm the connections the dashboard will need for its live data + map tiles -->
+    <link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossorigin />
+    <link rel="preconnect" href="https://earthquake.usgs.gov" crossorigin />
+    <link rel="preconnect" href="https://api.coingecko.com" crossorigin />
+    <link rel="dns-prefetch" href="https://b.basemaps.cartocdn.com" />
+    <link rel="dns-prefetch" href="https://c.basemaps.cartocdn.com" />
+    <link rel="dns-prefetch" href="https://d.basemaps.cartocdn.com" />
+    <link rel="dns-prefetch" href="https://eonet.gsfc.nasa.gov" />
+    <link rel="dns-prefetch" href="https://api.gdeltproject.org" />
+    <link rel="dns-prefetch" href="https://api.frankfurter.dev" />
+
+    <!-- Self-hosted fonts: no third-party render-blocker. Preload the above-the-fold weights. -->
+    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/satoshi-500.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/cabinet-800.woff2" crossorigin />
+    <style>
+      @font-face { font-family: 'Satoshi'; src: url('assets/fonts/satoshi-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+      @font-face { font-family: 'Satoshi'; src: url('assets/fonts/satoshi-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+      @font-face { font-family: 'Satoshi'; src: url('assets/fonts/satoshi-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+      @font-face { font-family: 'Cabinet Grotesk'; src: url('assets/fonts/cabinet-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+      @font-face { font-family: 'Cabinet Grotesk'; src: url('assets/fonts/cabinet-800.woff2') format('woff2'); font-weight: 800; font-style: normal; font-display: swap; }
+    </style>
+
+    <link rel="stylesheet" href="assets/vendor/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
     <script type="application/ld+json">
       {
@@ -144,7 +162,12 @@
       </p>
     </footer>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="assets/vendor/leaflet.js" defer></script>
     <script src="app.js" defer></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      }
+    </script>
   </body>
 </html>
