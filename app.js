@@ -11,15 +11,30 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const state = { signals: 0, lastRefresh: null };
+/* Per-module accounting. Modules refresh on independent timers, so a running
+   total would compound every cycle instead of describing what is on screen.
+   Each module reports its own latest count and health; the headline figures are
+   derived from that registry. */
+const MODULES = ['quakes', 'events', 'unrest', 'news', 'markets', 'crypto', 'fx', 'space'];
+const state = { feeds: {}, lastRefresh: null };
 
-function bumpSignals(n) {
-  state.signals += n;
-  $('[data-stat-signals]').textContent = state.signals.toLocaleString();
+function report(module, count, ok) {
+  state.feeds[module] = { count: Number(count) || 0, ok: !!ok, at: Date.now() };
+  renderStats();
 }
 
-function resetSignals() {
-  state.signals = 0;
+function renderStats() {
+  const live = MODULES.map((m) => state.feeds[m]).filter(Boolean);
+  const signals = live.reduce((sum, f) => sum + (f.ok ? f.count : 0), 0);
+  const healthy = live.filter((f) => f.ok).length;
+  const el = $('[data-stat-signals]');
+  if (el) el.textContent = signals.toLocaleString();
+  const st = $('[data-refresh-status]');
+  if (st && live.length) {
+    st.textContent = healthy === MODULES.length
+      ? `live · ${healthy}/${MODULES.length} feeds`
+      : `degraded · ${healthy}/${MODULES.length} feeds`;
+  }
 }
 
 async function fetchJSON(url, timeoutMs = 12000) {
@@ -135,11 +150,12 @@ async function loadQuakes() {
       )
       .join('') || '<li class="placeholder">Quiet planet right now.</li>';
 
-    bumpSignals(feats.length);
+    report('quakes', feats.length, true);
     setStatus('[data-quake-status]', true, `${feats.length} events ≥ M2.5`);
     return feats.length;
   } catch (e) {
     listEl.innerHTML = '<li class="placeholder">Seismic feed unavailable.</li>';
+    report('quakes', 0, false);
     setStatus('[data-quake-status]', false, 'USGS unreachable');
     return 0;
   }
@@ -184,11 +200,12 @@ async function loadEvents() {
       })
       .join('') || '<li class="placeholder">No open events.</li>';
 
-    bumpSignals(events.length);
+    report('events', events.length, true);
     setStatus('[data-event-status]', true, `${events.length} open events`);
     return events.length;
   } catch (e) {
     listEl.innerHTML = '<li class="placeholder">Satellite feed unavailable.</li>';
+    report('events', 0, false);
     setStatus('[data-event-status]', false, 'EONET unreachable');
     return 0;
   }
@@ -238,8 +255,9 @@ const CENTROIDS = {
 
 async function loadUnrest() {
   try {
+    const uq = encodeURIComponent('(protest OR riot OR unrest) sourcelang:eng');
     const data = await gdeltFetch(
-      'https://api.gdeltproject.org/api/v2/doc/doc?query=(protest%20OR%20riot%20OR%20unrest)%20sourcelang:eng&mode=artlist&maxrecords=75&format=json&timespan=1d'
+      `https://api.gdeltproject.org/api/v2/doc/doc?query=${uq}&mode=artlist&maxrecords=75&format=json&timespan=1d`
     );
     const byCountry = {};
     (data.articles || []).forEach((a) => {
@@ -260,20 +278,23 @@ async function loadUnrest() {
         .bindPopup(`<strong>${esc(c.replace(/\b\w/g, (m) => m.toUpperCase()))}</strong>${count} unrest-related stor${count > 1 ? 'ies' : 'y'} · 24h`)
         .addTo(layers.unrest);
     });
-    bumpSignals(n);
+    report('unrest', n, true);
     return n;
   } catch (e) {
+    report('unrest', 0, false);
     return 0;
   }
 }
 
 /* ══════════ module: global wire (GDELT DOC) ══════════ */
 
+/* Raw GDELT query strings. They are encoded once at call time — the previous
+   mix of hand-written %20 and literal spaces produced inconsistent URLs. */
 const NEWS_QUERIES = {
   geopolitics: '(geopolitics OR sanctions OR military OR diplomacy OR conflict)',
-  markets: '(stock%20market OR inflation OR "central bank" OR earnings)',
-  energy: '(oil%20prices OR OPEC OR "natural gas" OR renewable%20energy)',
-  ai: '("artificial intelligence" OR AI%20model OR semiconductor OR chips)',
+  markets: '("stock market" OR inflation OR "central bank" OR earnings)',
+  energy: '("oil prices" OR OPEC OR "natural gas" OR "renewable energy")',
+  ai: '("artificial intelligence" OR "AI model" OR semiconductor OR chips)',
 };
 
 let activeTheme = 'geopolitics';
@@ -281,8 +302,8 @@ let activeTheme = 'geopolitics';
 async function loadNews() {
   const listEl = $('[data-news-list]');
   try {
-    const q = NEWS_QUERIES[activeTheme];
-    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${q}%20sourcelang:eng&mode=artlist&maxrecords=25&format=json&timespan=12h&sort=datedesc`;
+    const q = encodeURIComponent(`${NEWS_QUERIES[activeTheme]} sourcelang:eng`);
+    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${q}&mode=artlist&maxrecords=25&format=json&timespan=12h&sort=datedesc`;
     const data = await gdeltFetch(url);
     const arts = (data.articles || []).filter((a, i, arr) => arr.findIndex((b) => b.title === a.title) === i);
     listEl.innerHTML = arts
@@ -294,10 +315,12 @@ async function loadNews() {
         </li>`
       )
       .join('') || '<li class="placeholder">Wire is quiet.</li>';
-    bumpSignals(arts.length);
+    report('news', arts.length, true);
+    lastWire = arts.slice(0, 12);
     setStatus('[data-news-status]', true, `${arts.length} stories · ${activeTheme}`);
   } catch (e) {
     listEl.innerHTML = '<li class="placeholder">Wire unavailable — GDELT may be rate-limiting. It recovers on the next cycle.</li>';
+    report('news', 0, false);
     setStatus('[data-news-status]', false, 'GDELT unreachable');
   }
 }
@@ -323,11 +346,12 @@ $$('.chip[data-theme]').forEach((chip) => {
 /* ══════════ module: market pulse (CoinGecko global + movers) ══════════ */
 
 function quoteCard(name, px, chgPct, opts = {}) {
+  const suffix = opts.suffix || '';
   const cls = chgPct > 0.001 ? 'up' : chgPct < -0.001 ? 'down' : 'flat';
   const sign = chgPct > 0 ? '+' : '';
   const chg = Number.isFinite(chgPct) ? `${sign}${chgPct.toFixed(2)}%` : '—';
   const pxStr = Number.isFinite(px)
-    ? (opts.compact ? compactUsd(px) : px.toLocaleString(undefined, { maximumFractionDigits: px < 10 ? 4 : 2 }))
+    ? (opts.compact ? compactUsd(px) : px.toLocaleString(undefined, { maximumFractionDigits: opts.digits ?? (px < 10 ? 4 : 2) }) + suffix)
     : '—';
   return `<div class="quote">
     <span class="q-sym">${esc(name)}</span>
@@ -352,8 +376,8 @@ async function loadMarkets() {
     idxEl.innerHTML = [
       quoteCard('Crypto mcap', d.total_market_cap?.usd ?? NaN, d.market_cap_change_percentage_24h_usd ?? NaN, { compact: true }),
       quoteCard('24h volume', d.total_volume?.usd ?? NaN, NaN, { compact: true }),
-      quoteCard('BTC dominance', d.market_cap_percentage?.btc ?? NaN, NaN),
-      quoteCard('Active coins', d.active_cryptocurrencies ?? NaN, NaN),
+      quoteCard('BTC dominance', d.market_cap_percentage?.btc ?? NaN, NaN, { suffix: '%', digits: 1 }),
+      quoteCard('Active coins', d.active_cryptocurrencies ?? NaN, NaN, { digits: 0 }),
     ].join('');
 
     const movers = await fetchJSON(
@@ -362,11 +386,12 @@ async function loadMarkets() {
     comEl.innerHTML = movers
       .map((c) => quoteCard(c.symbol.toUpperCase(), c.current_price, c.price_change_percentage_24h))
       .join('');
-    bumpSignals(4 + movers.length);
-    setStatus('[data-mkt-status]', true, '24h · CoinGecko — equities & commodities land with the AI Humane edge relay');
+    report('markets', 4 + movers.length, true);
+    setStatus('[data-mkt-status]', true, `${movers.length} assets · 24h · CoinGecko`);
   } catch (e) {
     idxEl.innerHTML = '<div class="placeholder">Market pulse cooling down (rate limit) — retries shortly.</div>';
     comEl.innerHTML = '';
+    report('markets', 0, false);
     setStatus('[data-mkt-status]', false, 'CoinGecko rate-limited');
   }
 }
@@ -391,10 +416,11 @@ async function loadCrypto() {
       const row = data[c.id];
       return quoteCard(c.name, row?.usd ?? NaN, row?.usd_24h_change ?? NaN);
     }).join('');
-    bumpSignals(COINS.length);
+    report('crypto', COINS.length, true);
     setStatus('[data-money-status]', true, '24h change · CoinGecko + ECB');
   } catch (e) {
     el.innerHTML = '<div class="placeholder">Crypto feed cooling down (rate limit) — retries shortly.</div>';
+    report('crypto', 0, false);
     setStatus('[data-money-status]', false, 'CoinGecko rate-limited');
   }
 }
@@ -406,31 +432,147 @@ async function loadFX() {
   try {
     const data = await fetchJSON(`https://api.frankfurter.dev/v1/latest?base=USD&symbols=${FX.join(',')}`);
     el.innerHTML = FX.map((sym) => quoteCard(`USD/${sym}`, data.rates?.[sym] ?? NaN, NaN)).join('');
-    bumpSignals(FX.length);
+    report('fx', FX.length, true);
   } catch (e) {
     el.innerHTML = '<div class="placeholder">FX feed unavailable.</div>';
+    report('fx', 0, false);
+  }
+}
+
+
+/* ══════════ module: space weather (NOAA SWPC — keyless) ══════════
+   Geomagnetic storms disrupt power grids, aviation routing and satellite
+   links, so they belong next to the other planetary signals. */
+
+const KP_LABEL = (kp) =>
+  kp >= 7 ? ['Severe storm', 'hi'] : kp >= 5 ? ['Geomagnetic storm', 'hi']
+  : kp >= 4 ? ['Unsettled', ''] : ['Quiet', ''];
+
+async function loadSpace() {
+  const el = $('[data-space]');
+  if (!el) return 0;
+  try {
+    const kpSeries = await fetchJSON('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json');
+    /* First row is a header; last row is the most recent 3-hour bin. */
+    const rows = (kpSeries || []).slice(1).filter((r) => r && r.length >= 2);
+    const latest = rows[rows.length - 1];
+    const kp = parseFloat(latest?.[1]);
+    const [label, hi] = KP_LABEL(kp);
+    const peak = rows.slice(-8).reduce((m, r) => Math.max(m, parseFloat(r[1]) || 0), 0);
+
+    el.innerHTML = [
+      quoteCard('Kp index', kp, NaN, { digits: 1 }),
+      quoteCard('Peak · 24h', peak, NaN, { digits: 1 }),
+    ].join('') +
+      `<div class="quote"><span class="q-sym">Condition</span>
+        <span class="q-px"><span class="event-badge${hi ? ' hi' : ''}">${esc(label)}</span></span>
+        <span class="q-chg flat">${esc((latest?.[0] || '').slice(0, 16))}Z</span></div>`;
+
+    report('space', rows.length ? 3 : 0, true);
+    setStatus('[data-space-status]', true, `Kp ${Number.isFinite(kp) ? kp.toFixed(1) : '—'} · NOAA SWPC`);
+    return kp;
+  } catch (e) {
+    el.innerHTML = '<div class="placeholder">Space weather feed unavailable.</div>';
+    report('space', 0, false);
+    setStatus('[data-space-status]', false, 'NOAA SWPC unreachable');
+    return 0;
+  }
+}
+
+/* ══════════ module: AI brief (Groq, via the AI Humane gateway) ══════════
+   Everything above is raw signal. This turns the current screen into a short
+   situational read. The gateway holds the API key server-side — nothing
+   sensitive ships to the browser. */
+
+const GATEWAY = 'https://vctzpkkzmjwsoycgkzju.supabase.co/functions/v1/iva-gateway';
+const GATEWAY_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjdHpwa2t6bWp3c295Y2dremp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MTgzNjQsImV4cCI6MjEwMDQ5NDM2NH0.GYjMn5JFhr9ISDAvd0lVfduROOJvnBbd2utPah6O4mU';
+const BRIEF_MODEL = 'groq/openai/gpt-oss-120b';
+
+let lastWire = [];
+let briefAt = 0;
+
+function briefFacts() {
+  const f = state.feeds;
+  const lines = [];
+  if (f.quakes?.ok) lines.push(`Seismic: ${f.quakes.count} quakes at or above M2.5 in the last 24h.`);
+  if (f.events?.ok) lines.push(`Natural events open now (NASA EONET): ${f.events.count}.`);
+  if (f.unrest?.ok) lines.push(`Unrest-related stories in the last 24h (GDELT): ${f.unrest.count}.`);
+  if (f.space?.ok) {
+    const kp = $('[data-space] .q-px')?.textContent?.trim();
+    if (kp) lines.push(`Geomagnetic Kp index: ${kp}.`);
+  }
+  if (lastWire.length) {
+    lines.push('Recent headlines:');
+    lastWire.slice(0, 10).forEach((a) => lines.push(`- ${a.title}`));
+  }
+  return lines.join('\n');
+}
+
+async function loadBrief() {
+  const el = $('[data-brief]');
+  if (!el) return;
+  /* One synthesis per 10 minutes: the underlying feeds move slower than that,
+     and it keeps model usage proportionate. */
+  if (Date.now() - briefAt < 600000) return;
+  const facts = briefFacts();
+  if (!facts) return;
+  briefAt = Date.now();
+
+  el.innerHTML = '<p class="placeholder">Reading the board…</p>';
+  try {
+    const res = await fetch(GATEWAY, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GATEWAY_KEY}`,
+        apikey: GATEWAY_KEY,
+      },
+      body: JSON.stringify({
+        model: BRIEF_MODEL,
+        stream: false,
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a situational analyst. From the live readings below, write 3 short bullets on what is notable right now. ' +
+              'Use only what you are given — do not invent numbers, places or events, and do not speculate about causes. ' +
+              'If the readings are unremarkable, say so plainly. No preamble, no headings, under 70 words total.',
+          },
+          { role: 'user', content: facts },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error('empty');
+
+    const bullets = text.split(/\n+/).map((l) => l.replace(/^[-•*\d.\s]+/, '').trim()).filter(Boolean);
+    el.innerHTML = `<ul class="brief-list">${bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>`;
+    const tok = data?.usage?.total_tokens;
+    setStatus('[data-brief-status]', true, `GPT-OSS 120B${tok ? ` · ${tok} tokens` : ''} — synthesis of the feeds above, not a separate source`);
+  } catch (e) {
+    el.innerHTML = '<p class="placeholder">Brief unavailable — the panels above are unaffected.</p>';
+    setStatus('[data-brief-status]', false, 'synthesis offline');
   }
 }
 
 /* ══════════ orchestration ══════════ */
 
 async function refreshAll() {
-  resetSignals();
   $('[data-refresh-status]').textContent = 'refreshing…';
-  const results = await Promise.allSettled([
-    loadQuakes(),
-    loadEvents(),
-    loadUnrest(),
-    loadNews(),
-    loadMarkets(),
-    loadCrypto(),
-    loadFX(),
+  /* Every loader catches its own error, so promise settlement says nothing
+     about feed health — renderStats() reads the per-module registry instead. */
+  await Promise.allSettled([
+    loadQuakes(), loadEvents(), loadUnrest(), loadNews(),
+    loadMarkets(), loadCrypto(), loadFX(), loadSpace(),
   ]);
-  const ok = results.filter((r) => r.status === 'fulfilled').length;
   state.lastRefresh = Date.now();
-  $('[data-refresh-status]').textContent = `live · ${ok}/7 feeds`;
+  renderStats();
   $('[data-map-status]').textContent =
     `earthquakes ● amber · natural events ● cyan · unrest ● violet — click any marker`;
+  loadBrief();
 }
 
 refreshAll();
@@ -439,3 +581,5 @@ setInterval(loadNews, 180000);
 setInterval(() => { loadQuakes(); loadEvents(); loadUnrest(); }, 300000);
 setInterval(loadMarkets, 300000);
 setInterval(loadFX, 1800000);
+setInterval(loadSpace, 900000);
+setInterval(loadBrief, 600000);

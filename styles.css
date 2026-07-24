@@ -341,3 +341,22 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   .statbar { grid-template-columns: repeat(2, 1fr); }
   .brand-by { display: none; }
 }
+
+
+/* ── AI brief ─────────────────────────────────────────────────────────── */
+.panel-brief { grid-column: 1 / -1; }
+.brief-tag {
+  font-size: .62rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent, #ff8a1f); border: 1px solid currentColor;
+  border-radius: 999px; padding: .1rem .5rem; opacity: .85;
+}
+.brief-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.brief-list li {
+  position: relative; padding-left: 1rem; font-size: .92rem; line-height: 1.5;
+}
+.brief-list li::before {
+  content: ""; position: absolute; left: 0; top: .58em;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent, #ff8a1f);
+}
+@media (min-width: 900px) { .brief-list { grid-auto-flow: column; grid-auto-columns: 1fr; } }

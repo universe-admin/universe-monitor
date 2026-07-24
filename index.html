@@ -72,12 +72,24 @@
 
     <section class="statbar" aria-label="Platform facts">
       <div><strong data-stat-signals>—</strong><span>live signals on screen</span></div>
-      <div><strong>10+</strong><span>public data sources</span></div>
+      <div><strong>11+</strong><span>public data sources</span></div>
       <div><strong>60s</strong><span>fastest refresh cycle</span></div>
       <div><strong>$0</strong><span>free forever · no sign-in</span></div>
     </section>
 
     <main class="grid" id="main">
+      <!-- ══════════ AI BRIEF ══════════ -->
+      <section class="panel panel-brief" aria-labelledby="brief-title">
+        <header class="panel-head">
+          <h2 id="brief-title">What matters right now</h2>
+          <span class="brief-tag">AI synthesis</span>
+        </header>
+        <div data-brief aria-live="polite">
+          <p class="placeholder">Waiting for the first full read…</p>
+        </div>
+        <footer class="panel-foot" data-brief-status>—</footer>
+      </section>
+
       <!-- ══════════ MAP ══════════ -->
       <section class="panel panel-map" aria-labelledby="map-title">
         <header class="panel-head">
@@ -147,6 +159,14 @@
           <li class="placeholder">Scanning satellites…</li>
         </ol>
         <footer class="panel-foot" data-event-status>—</footer>
+      </section>
+      <!-- ══════════ SPACE WEATHER ══════════ -->
+      <section class="panel panel-space" aria-labelledby="space-title">
+        <header class="panel-head"><h2 id="space-title">Space weather</h2></header>
+        <div class="quote-grid" data-space>
+          <div class="placeholder">Reading the magnetosphere…</div>
+        </div>
+        <footer class="panel-foot" data-space-status>—</footer>
       </section>
     </main>
 
