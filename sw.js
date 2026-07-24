@@ -4,7 +4,12 @@
    - Page navigations: network-first (fresh content), cache fallback offline.
    - Data feeds + map tiles (cross-origin): never intercepted — always live. */
 
-const CACHE = 'um-static-v1';
+/* Bump this whenever a precached asset changes. Navigations are network-first
+   while same-origin assets are stale-while-revalidate, so without a bump a
+   returning visitor can get new index.html paired with a cached older app.js —
+   new markup with no code to fill it. Changing the name makes activate() drop
+   the old cache and re-precache the current set. */
+const CACHE = 'um-static-v2';
 
 const PRECACHE = [
   './',
