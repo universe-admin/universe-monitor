@@ -152,10 +152,14 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 .panel-map    { grid-column: span 8; min-height: 460px; }
 .panel-news   { grid-column: span 4; min-height: 460px; }
+.panel-instability { grid-column: span 4; }
 .panel-markets{ grid-column: span 4; }
 .panel-money  { grid-column: span 4; }
-.panel-quakes { grid-column: span 2; }
-.panel-events { grid-column: span 2; }
+.panel-sessions { grid-column: span 12; min-height: 0; }
+.panel-quakes { grid-column: span 4; }
+.panel-events { grid-column: span 4; }
+/* Previously unset, which auto-placed it into a single 1/12 column. */
+.panel-space  { grid-column: span 4; }
 
 .panel-head {
   display: flex;
@@ -332,8 +336,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* ══════════ Responsive ══════════ */
 @media (max-width: 1100px) {
   .panel-map, .panel-news { grid-column: span 12; }
+  .panel-instability { grid-column: span 12; }
   .panel-markets, .panel-money { grid-column: span 6; }
   .panel-quakes, .panel-events { grid-column: span 6; }
+  .panel-space { grid-column: span 12; }
 }
 
 @media (max-width: 640px) {
@@ -360,3 +366,100 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: var(--accent, #ff8a1f);
 }
 @media (min-width: 900px) { .brief-list { grid-auto-flow: column; grid-auto-columns: 1fr; } }
+
+/* ── Globe ────────────────────────────────────────────────────────────── */
+.view-toggles { margin-left: auto; }
+
+.globe-wrap {
+  flex: 1;
+  min-height: 340px;
+  position: relative;
+  display: flex;
+  background: radial-gradient(60rem 40rem at 50% 40%, rgba(109, 90, 230, 0.06), transparent), #080b14;
+}
+.globe-wrap[hidden] { display: none; }
+
+#globe { flex: 1; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+#globe:active { cursor: grabbing; }
+#globe:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+
+.globe-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--faint);
+  background: linear-gradient(180deg, transparent, rgba(7, 9, 15, 0.85) 45%);
+  pointer-events: none;
+}
+.globe-bar .chip { pointer-events: auto; padding: 2px 9px; font-size: 10px; }
+
+/* ── Instability index ────────────────────────────────────────────────── */
+.ix-list { list-style: none; margin: 0; padding: 6px 14px 0; display: grid; gap: 9px; }
+
+.ix-row { display: flex; align-items: flex-start; gap: 10px; }
+
+.ix-rank {
+  min-width: 34px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--amber-2);
+  text-align: right;
+}
+
+.ix-body { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.ix-country { font-size: 12px; font-weight: 700; color: var(--text); }
+
+.ix-bar { display: block; height: 4px; border-radius: 999px; background: rgba(148, 163, 216, 0.12); overflow: hidden; }
+.ix-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--amber), var(--amber-2)); }
+
+.ix-parts { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.ix-part { font-size: 10px; color: var(--faint); white-space: nowrap; }
+.ix-part::before {
+  content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--c, var(--faint)); margin-right: 4px; vertical-align: 1px;
+}
+
+.ix-note { padding: 12px 14px 0; font-size: 10.5px; line-height: 1.5; color: var(--faint); }
+
+/* ── Exchange floor ───────────────────────────────────────────────────── */
+.mkt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.mkt {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  grid-template-areas: "dot code clock" "dot city next";
+  align-items: center;
+  gap: 1px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  opacity: 0.62;
+}
+.mkt.is-open { opacity: 1; border-color: rgba(74, 222, 128, 0.32); background: rgba(74, 222, 128, 0.05); }
+
+.mkt-dot { grid-area: dot; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.mkt.is-open .mkt-dot { background: var(--up); box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.16); }
+
+.mkt-code  { grid-area: code; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--text); }
+.mkt-city  { grid-area: city; font-size: 10px; color: var(--faint); }
+.mkt-clock { grid-area: clock; font-family: var(--font-display); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--muted); }
+.mkt.is-open .mkt-clock { color: var(--text); }
+.mkt-next  { grid-area: next; font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums; text-align: right; }
+
+@media (max-width: 640px) {
+  .mkt-grid { grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); }
+  .view-toggles { margin-left: 0; }
+}

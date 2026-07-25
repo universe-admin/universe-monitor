@@ -9,13 +9,17 @@
    returning visitor can get new index.html paired with a cached older app.js —
    new markup with no code to fill it. Changing the name makes activate() drop
    the old cache and re-precache the current set. */
-const CACHE = 'um-static-v2';
+const CACHE = 'um-static-v3';
 
 const PRECACHE = [
   './',
   'index.html',
   'styles.css',
   'app.js',
+  'globe.js',
+  'exchanges.js',
+  'instability.js',
+  'assets/data/world.json',
   'assets/vendor/leaflet.js',
   'assets/vendor/leaflet.css',
   'assets/fonts/satoshi-400.woff2',

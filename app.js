@@ -15,7 +15,10 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
    total would compound every cycle instead of describing what is on screen.
    Each module reports its own latest count and health; the headline figures are
    derived from that registry. */
-const MODULES = ['quakes', 'events', 'unrest', 'news', 'markets', 'crypto', 'fx', 'space'];
+const MODULES = ['quakes', 'events', 'instability', 'news', 'markets', 'crypto', 'fx', 'space', 'venues'];
+/* Computed on the device rather than fetched. They count as signals on screen
+   but they cannot fail, so they stay out of the feed-health fraction. */
+const LOCAL_MODULES = ['sessions'];
 const state = { feeds: {}, lastRefresh: null };
 
 function report(module, count, ok) {
@@ -24,9 +27,9 @@ function report(module, count, ok) {
 }
 
 function renderStats() {
-  const live = MODULES.map((m) => state.feeds[m]).filter(Boolean);
+  const live = MODULES.concat(LOCAL_MODULES).map((m) => state.feeds[m]).filter(Boolean);
   const signals = live.reduce((sum, f) => sum + (f.ok ? f.count : 0), 0);
-  const healthy = live.filter((f) => f.ok).length;
+  const healthy = MODULES.map((m) => state.feeds[m]).filter((f) => f && f.ok).length;
   const el = $('[data-stat-signals]');
   if (el) el.textContent = signals.toLocaleString();
   const st = $('[data-refresh-status]');
@@ -108,14 +111,94 @@ const layers = {
   unrest: L.layerGroup().addTo(map),
 };
 
+/* The globe renders the same signals as the flat map, so both read from one
+   registry rather than each loader knowing about two renderers. */
+const signals = { quakes: [], events: [], unrest: [] };
+const layerOn = { quakes: true, events: true, unrest: true };
+
+function setSignals(kind, points) {
+  signals[kind] = points || [];
+  syncGlobe();
+}
+
 $$('.chip[data-layer]').forEach((chip) => {
   chip.addEventListener('click', () => {
     const key = chip.dataset.layer;
     const on = chip.classList.toggle('is-on');
+    layerOn[key] = on;
     if (on) map.addLayer(layers[key]);
     else map.removeLayer(layers[key]);
+    syncGlobe();
   });
 });
+
+/* ══════════ 3D globe ══════════
+   Same signals, wrapped onto a sphere. The flat map stays the default view;
+   the globe is drawn on a 2D canvas, so there is no WebGL requirement and no
+   3D library to ship. */
+
+let globe = null;
+let globeMode = false;
+
+function syncGlobe() {
+  if (!globe) return;
+  const pts = [];
+  Object.keys(signals).forEach((kind) => {
+    if (!layerOn[kind]) return;
+    signals[kind].forEach((p) => pts.push(p));
+  });
+  globe.setMarkers(pts);
+}
+
+function initGlobe() {
+  const canvas = $('#globe');
+  if (!canvas || !window.Globe) return;
+  globe = window.Globe.create(canvas, {
+    onSelect: (m) => {
+      const el = $('[data-globe-readout]');
+      if (!el) return;
+      el.textContent = m ? m.label : 'Drag to spin · scroll to zoom · click a marker';
+    },
+  });
+  fetch('assets/data/world.json')
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('world geometry'))))
+    .then((w) => globe.setWorld(w))
+    .catch(() => {
+      const el = $('[data-globe-readout]');
+      if (el) el.textContent = 'Coastlines unavailable — signals still plotted.';
+    });
+  syncGlobe();
+}
+
+function setView(mode) {
+  globeMode = mode === 'globe';
+  const mapEl = $('#map'), globeWrap = $('[data-globe-wrap]');
+  if (!mapEl || !globeWrap) return;
+  mapEl.hidden = globeMode;
+  globeWrap.hidden = !globeMode;
+  $$('.chip[data-view]').forEach((c) => c.classList.toggle('is-on', (c.dataset.view === 'globe') === globeMode));
+  if (globeMode) {
+    if (!globe) initGlobe();
+    if (globe) { globe.start(); syncGlobe(); }
+  } else {
+    if (globe) globe.stop();
+    map.invalidateSize();
+  }
+}
+
+$$('.chip[data-view]').forEach((chip) => {
+  chip.addEventListener('click', () => setView(chip.dataset.view));
+});
+const spinChip = $('[data-globe-spin]');
+if (spinChip) {
+  spinChip.addEventListener('click', () => {
+    if (!globe) return;
+    const on = !globe.spinning;
+    globe.setSpin(on);
+    spinChip.classList.toggle('is-on', on);
+    spinChip.textContent = on ? 'Spinning' : 'Paused';
+  });
+}
 
 /* ══════════ module: earthquakes (USGS) ══════════ */
 
@@ -139,6 +222,16 @@ async function loadQuakes() {
         .addTo(layers.quakes);
     });
 
+    setSignals('quakes', feats.map((f) => {
+      const [lon, lat] = f.geometry.coordinates;
+      const mag = f.properties.mag ?? 0;
+      return {
+        lat, lon, r: Math.max(2.5, mag * 1.4),
+        color: mag >= 5.5 ? '#f87171' : '#ff8a1f',
+        label: `M${mag.toFixed(1)} · ${f.properties.place || 'unknown'} · ${ago(f.properties.time)}`,
+      };
+    }));
+
     const top = feats.slice().sort((a, b) => b.properties.mag - a.properties.mag).slice(0, 14);
     listEl.innerHTML = top
       .map(
@@ -155,6 +248,7 @@ async function loadQuakes() {
     return feats.length;
   } catch (e) {
     listEl.innerHTML = '<li class="placeholder">Seismic feed unavailable.</li>';
+    setSignals('quakes', []);
     report('quakes', 0, false);
     setStatus('[data-quake-status]', false, 'USGS unreachable');
     return 0;
@@ -187,6 +281,15 @@ async function loadEvents() {
         .addTo(layers.events);
     });
 
+    setSignals('events', events.map((ev) => {
+      const g = ev.geometry[ev.geometry.length - 1];
+      if (!g || g.type !== 'Point') return null;
+      return {
+        lat: g.coordinates[1], lon: g.coordinates[0], r: 3.5, color: '#22d3ee',
+        label: `${ev.categories?.[0]?.title || 'Event'} · ${ev.title}`,
+      };
+    }).filter(Boolean));
+
     listEl.innerHTML = events
       .slice(0, 14)
       .map((ev) => {
@@ -205,6 +308,7 @@ async function loadEvents() {
     return events.length;
   } catch (e) {
     listEl.innerHTML = '<li class="placeholder">Satellite feed unavailable.</li>';
+    setSignals('events', []);
     report('events', 0, false);
     setStatus('[data-event-status]', false, 'EONET unreachable');
     return 0;
@@ -234,56 +338,79 @@ function gdeltFetch(url) {
   return p;
 }
 
-/* ══════════ module: unrest signals (GDELT DOC → country bubbles) ══════════ */
+/* ══════════ module: Country Instability Index (GDELT GEO) ══════════
+   Three families of language — armed conflict, governance stress, civil
+   unrest — geolocated to the places the coverage is *about*, then weighted
+   and ranked per country. instability.js holds the scoring and its caveats;
+   this half does the fetching and the drawing.
 
-const CENTROIDS = {
-  'united states': [39.8, -98.6], 'china': [35.9, 104.2], 'india': [21.0, 78.0], 'russia': [61.5, 96.7],
-  'united kingdom': [54.0, -2.5], 'france': [46.6, 2.5], 'germany': [51.1, 10.4], 'brazil': [-10.8, -52.9],
-  'japan': [36.6, 138.0], 'south korea': [36.4, 127.8], 'north korea': [40.3, 127.4], 'iran': [32.6, 54.3],
-  'israel': [31.4, 35.0], 'ukraine': [48.9, 31.4], 'turkey': [39.0, 35.3], 'pakistan': [29.9, 69.4],
-  'indonesia': [-2.2, 117.4], 'nigeria': [9.6, 8.1], 'egypt': [26.6, 29.8], 'south africa': [-29.0, 25.1],
-  'mexico': [23.9, -102.5], 'argentina': [-35.4, -65.2], 'colombia': [3.9, -73.1], 'venezuela': [7.1, -66.2],
-  'canada': [56.1, -106.3], 'australia': [-25.7, 134.5], 'spain': [40.2, -3.6], 'italy': [42.8, 12.1],
-  'poland': [52.1, 19.4], 'netherlands': [52.2, 5.6], 'greece': [39.1, 22.9], 'sweden': [62.8, 16.7],
-  'saudi arabia': [24.1, 44.5], 'iraq': [33.0, 43.8], 'syria': [35.0, 38.5], 'yemen': [15.9, 47.6],
-  'afghanistan': [33.8, 66.0], 'bangladesh': [23.9, 90.2], 'myanmar': [21.2, 96.5], 'thailand': [15.1, 101.0],
-  'philippines': [12.9, 122.9], 'vietnam': [16.6, 106.3], 'kenya': [0.5, 37.9], 'ethiopia': [8.6, 39.6],
-  'sudan': [15.6, 30.3], 'congo': [-2.9, 23.6], 'somalia': [6.1, 45.9], 'libya': [27.0, 18.0],
-  'georgia': [42.2, 43.5], 'serbia': [44.2, 20.8], 'belarus': [53.5, 28.0], 'kazakhstan': [48.2, 67.3],
-  'peru': [-9.2, -74.4], 'chile': [-37.7, -71.4], 'bolivia': [-16.7, -64.7], 'haiti': [19.1, -72.7],
-};
+   GEO is used rather than the article list because the article list only
+   carries the publisher's country: a London desk writing about Khartoum
+   would score London. GEO reports the places mentioned instead. */
 
-async function loadUnrest() {
-  try {
-    const uq = encodeURIComponent('(protest OR riot OR unrest) sourcelang:eng');
-    const data = await gdeltFetch(
-      `https://api.gdeltproject.org/api/v2/doc/doc?query=${uq}&mode=artlist&maxrecords=75&format=json&timespan=1d`
-    );
-    const byCountry = {};
-    (data.articles || []).forEach((a) => {
-      const c = String(a.sourcecountry || '').toLowerCase();
-      if (CENTROIDS[c]) byCountry[c] = (byCountry[c] || 0) + 1;
-    });
-    layers.unrest.clearLayers();
-    let n = 0;
-    Object.entries(byCountry).forEach(([c, count]) => {
-      n += count;
-      L.circleMarker(CENTROIDS[c], {
-        radius: Math.min(14, 4 + Math.log2(count + 1) * 2.4),
-        color: '#6d5ae6',
-        weight: 1,
-        fillColor: '#6d5ae6',
-        fillOpacity: 0.4,
-      })
-        .bindPopup(`<strong>${esc(c.replace(/\b\w/g, (m) => m.toUpperCase()))}</strong>${count} unrest-related stor${count > 1 ? 'ies' : 'y'} · 24h`)
-        .addTo(layers.unrest);
-    });
-    report('unrest', n, true);
-    return n;
-  } catch (e) {
-    report('unrest', 0, false);
+async function loadInstability() {
+  const listEl = $('[data-instability-list]');
+  const responses = [];
+
+  for (const dimension of Instability.DIMENSIONS) {
+    try {
+      const q = encodeURIComponent(`${dimension.query} sourcelang:eng`);
+      const geojson = await gdeltFetch(
+        `https://api.gdeltproject.org/api/v2/geo/geo?query=${q}&format=GeoJSON&mode=PointData&timespan=1d`
+      );
+      responses.push({ dimension, geojson });
+    } catch (e) {
+      /* One dimension failing narrows the index; it does not void it. The
+         footer says which dimensions actually made it in. */
+    }
+  }
+
+  const { ranked, points, dimensions, mentions } = Instability.aggregate(responses);
+
+  layers.unrest.clearLayers();
+  points.forEach((p) => {
+    L.circleMarker([p.lat, p.lon], {
+      radius: Math.min(13, 3 + Math.log2(p.count + 1) * 1.9),
+      color: p.color, weight: 1, fillColor: p.color, fillOpacity: 0.38,
+    })
+      .bindPopup(`<strong>${esc(p.place)}</strong>${p.count} mention${p.count > 1 ? 's' : ''} · ${esc(p.kind)} · 24h`)
+      .addTo(layers.unrest);
+  });
+  setSignals('unrest', points.map((p) => ({
+    lat: p.lat, lon: p.lon, color: p.color,
+    r: Math.min(9, 2.5 + Math.log2(p.count + 1) * 1.3),
+    label: `${p.place} · ${p.count} mention${p.count > 1 ? 's' : ''} · ${p.kind}`,
+  })));
+
+  if (!ranked.length) {
+    if (listEl) listEl.innerHTML = '<li class="placeholder">Index unavailable — GDELT may be rate-limiting. It rebuilds on the next cycle.</li>';
+    report('instability', 0, false);
+    setStatus('[data-instability-status]', false, 'GDELT GEO unreachable');
     return 0;
   }
+
+  if (listEl) {
+    listEl.innerHTML = ranked.slice(0, 12).map((r) => {
+      const parts = Instability.DIMENSIONS
+        .filter((d) => r.parts[d.key])
+        .map((d) => `<span class="ix-part" style="--c:${d.color}">${d.label.toLowerCase()} ${r.parts[d.key]}</span>`)
+        .join('');
+      return `<li class="ix-row">
+        <span class="ix-rank">${r.index}</span>
+        <span class="ix-body">
+          <span class="ix-country">${esc(r.country)}</span>
+          <span class="ix-bar"><i style="width:${Math.max(2, r.index)}%"></i></span>
+          <span class="ix-parts">${parts}</span>
+        </span>
+      </li>`;
+    }).join('');
+  }
+
+  lastIndex = ranked;
+  report('instability', ranked.length, true);
+  setStatus('[data-instability-status]', true,
+    `${ranked.length} countries · ${mentions.toLocaleString()} geolocated mentions · ${dimensions.length}/3 dimensions · GDELT GEO`);
+  return ranked.length;
 }
 
 /* ══════════ module: global wire (GDELT DOC) ══════════ */
@@ -396,6 +523,64 @@ async function loadMarkets() {
   }
 }
 
+/* ══════════ module: trading venues (CoinGecko exchanges) ══════════
+   Where the volume actually clears. Trust score is CoinGecko's own 1–10
+   rating of a venue's reported volume, not ours. */
+
+async function loadVenues() {
+  const el = $('[data-venues]');
+  if (!el) return 0;
+  try {
+    const list = await fetchJSON('https://api.coingecko.com/api/v3/exchanges?per_page=8&page=1');
+    const rows = Array.isArray(list) ? list.slice(0, 8) : [];
+    if (!rows.length) throw new Error('empty');
+    el.innerHTML = rows.map((x) => {
+      const btc = Number(x.trade_volume_24h_btc);
+      const trust = Number(x.trust_score);
+      const cls = trust >= 9 ? 'up' : trust >= 7 ? 'flat' : 'down';
+      return `<div class="quote">
+        <span class="q-sym">${esc(x.name || x.id || '—')}</span>
+        <span class="q-px">${Number.isFinite(btc) ? btc.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' BTC' : '—'}</span>
+        <span class="q-chg ${cls}">${Number.isFinite(trust) ? 'trust ' + trust + '/10' : '—'}</span>
+      </div>`;
+    }).join('');
+    report('venues', rows.length, true);
+    return rows.length;
+  } catch (e) {
+    el.innerHTML = '<div class="placeholder">Venue rankings cooling down (rate limit) — retries shortly.</div>';
+    report('venues', 0, false);
+    return 0;
+  }
+}
+
+/* ══════════ module: world exchange sessions ══════════
+   Computed from published trading hours and the browser's own timezone
+   database — no feed, no key, and it survives every API being down.
+   exchanges.js holds the table and the open/closed maths. */
+
+function renderSessions() {
+  const el = $('[data-sessions]');
+  if (!el || !window.Exchanges) return 0;
+  const rows = Exchanges.snapshot();
+  const open = rows.filter((r) => r.open);
+
+  el.innerHTML = rows.map((r) => `
+    <div class="mkt ${r.open ? 'is-open' : ''}" title="${esc(r.ex.city)} · ${esc(r.hours)} local">
+      <span class="mkt-dot" aria-hidden="true"></span>
+      <span class="mkt-code">${esc(r.ex.code)}</span>
+      <span class="mkt-city">${esc(r.ex.city)}</span>
+      <span class="mkt-clock">${esc(r.localTime)}</span>
+      <span class="mkt-next">${r.open ? 'closes' : 'opens'} in ${esc(Exchanges.countdown(r.next && r.next.in))}</span>
+    </div>`).join('');
+
+  const counter = $('[data-sessions-count]');
+  if (counter) counter.textContent = `${open.length}/${rows.length} open`;
+  report('sessions', rows.length, true);
+  setStatus('[data-sessions-status]', true,
+    `${open.length} of ${rows.length} trading now · local exchange hours · public holidays not modelled`);
+  return rows.length;
+}
+
 /* ══════════ module: crypto (CoinGecko) + FX (Frankfurter) ══════════ */
 
 const COINS = [
@@ -425,7 +610,7 @@ async function loadCrypto() {
   }
 }
 
-const FX = ['EUR', 'GBP', 'JPY', 'INR', 'CNY', 'CHF'];
+const FX = ['EUR', 'GBP', 'JPY', 'INR', 'CNY', 'CHF', 'CAD', 'AUD', 'BRL', 'ZAR', 'MXN', 'KRW'];
 
 async function loadFX() {
   const el = $('[data-fx]');
@@ -489,6 +674,7 @@ const GATEWAY_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const BRIEF_MODEL = 'groq/openai/gpt-oss-120b';
 
 let lastWire = [];
+let lastIndex = [];
 let briefAt = 0;
 
 function briefFacts() {
@@ -496,7 +682,14 @@ function briefFacts() {
   const lines = [];
   if (f.quakes?.ok) lines.push(`Seismic: ${f.quakes.count} quakes at or above M2.5 in the last 24h.`);
   if (f.events?.ok) lines.push(`Natural events open now (NASA EONET): ${f.events.count}.`);
-  if (f.unrest?.ok) lines.push(`Unrest-related stories in the last 24h (GDELT): ${f.unrest.count}.`);
+  if (f.instability?.ok && lastIndex.length) {
+    lines.push('Countries by instability-signal index (relative, media-derived, 100 = highest today):');
+    lastIndex.slice(0, 6).forEach((r) => lines.push(`- ${r.country}: ${r.index}`));
+  }
+  if (f.sessions?.ok) {
+    const c = $('[data-sessions-count]')?.textContent;
+    if (c) lines.push(`Exchange sessions: ${c}.`);
+  }
   if (f.space?.ok) {
     const kp = $('[data-space] .q-px')?.textContent?.trim();
     if (kp) lines.push(`Geomagnetic Kp index: ${kp}.`);
@@ -564,22 +757,26 @@ async function refreshAll() {
   $('[data-refresh-status]').textContent = 'refreshing…';
   /* Every loader catches its own error, so promise settlement says nothing
      about feed health — renderStats() reads the per-module registry instead. */
+  renderSessions();
   await Promise.allSettled([
-    loadQuakes(), loadEvents(), loadUnrest(), loadNews(),
-    loadMarkets(), loadCrypto(), loadFX(), loadSpace(),
+    loadQuakes(), loadEvents(), loadInstability(), loadNews(),
+    loadMarkets(), loadVenues(), loadCrypto(), loadFX(), loadSpace(),
   ]);
   state.lastRefresh = Date.now();
   renderStats();
   $('[data-map-status]').textContent =
-    `earthquakes ● amber · natural events ● cyan · unrest ● violet — click any marker`;
+    'earthquakes ● amber · natural events ● cyan · conflict ● red · governance ● orange · unrest ● violet — click any marker';
   loadBrief();
 }
 
 refreshAll();
+setInterval(renderSessions, 30000);      // a clock, so it ticks on its own
 setInterval(loadCrypto, 120000);
 setInterval(loadNews, 180000);
-setInterval(() => { loadQuakes(); loadEvents(); loadUnrest(); }, 300000);
+setInterval(() => { loadQuakes(); loadEvents(); }, 300000);
 setInterval(loadMarkets, 300000);
+setInterval(loadVenues, 600000);
+setInterval(loadInstability, 1200000);   // 3 queued GDELT calls; it moves slowly
 setInterval(loadFX, 1800000);
 setInterval(loadSpace, 900000);
 setInterval(loadBrief, 600000);

@@ -97,10 +97,22 @@
           <div class="layer-toggles" role="group" aria-label="Map layers">
             <button class="chip is-on" data-layer="quakes">Earthquakes</button>
             <button class="chip is-on" data-layer="events">Natural events</button>
-            <button class="chip is-on" data-layer="unrest">Unrest signals</button>
+            <button class="chip is-on" data-layer="unrest">Instability</button>
+          </div>
+          <div class="layer-toggles view-toggles" role="group" aria-label="View">
+            <button class="chip is-on" data-view="map">Map</button>
+            <button class="chip" data-view="globe">Globe</button>
           </div>
         </header>
         <div id="map" role="application" aria-label="World map with live event layers"></div>
+        <div class="globe-wrap" data-globe-wrap hidden>
+          <canvas id="globe" tabindex="0" role="application"
+                  aria-label="Rotating globe with live event layers. Arrow keys spin it; space pauses."></canvas>
+          <div class="globe-bar">
+            <span data-globe-readout>Drag to spin · scroll to zoom · click a marker</span>
+            <button class="chip is-on" data-globe-spin>Spinning</button>
+          </div>
+        </div>
         <footer class="panel-foot" data-map-status>loading layers…</footer>
       </section>
 
@@ -121,6 +133,24 @@
         <footer class="panel-foot" data-news-status>—</footer>
       </section>
 
+      <!-- ══════════ INSTABILITY INDEX ══════════ -->
+      <section class="panel panel-instability" aria-labelledby="ix-title">
+        <header class="panel-head">
+          <h2 id="ix-title">Instability index</h2>
+          <span class="brief-tag">relative · 24h</span>
+        </header>
+        <ol class="ix-list" data-instability-list aria-live="polite">
+          <li class="placeholder">Scoring the wire…</li>
+        </ol>
+        <p class="ix-note">
+          Volume of conflict, governance-stress and unrest reporting geolocated to each
+          country, weighted by severity and scaled to today's highest. A measure of
+          coverage, not of ground truth — English-language sources, and quiet places
+          under-report.
+        </p>
+        <footer class="panel-foot" data-instability-status>—</footer>
+      </section>
+
       <!-- ══════════ MARKETS ══════════ -->
       <section class="panel panel-markets" aria-labelledby="mkt-title">
         <header class="panel-head"><h2 id="mkt-title">Market pulse</h2></header>
@@ -129,6 +159,10 @@
         </div>
         <h3 class="subhead">Top assets · 24h</h3>
         <div class="quote-grid" data-commodities></div>
+        <h3 class="subhead">Top venues · 24h volume</h3>
+        <div class="quote-grid" data-venues>
+          <div class="placeholder">Ranking venues…</div>
+        </div>
         <footer class="panel-foot" data-mkt-status>—</footer>
       </section>
 
@@ -141,6 +175,18 @@
         <h3 class="subhead">US dollar vs</h3>
         <div class="quote-grid" data-fx></div>
         <footer class="panel-foot" data-money-status>—</footer>
+      </section>
+
+      <!-- ══════════ EXCHANGE SESSIONS ══════════ -->
+      <section class="panel panel-sessions" aria-labelledby="sessions-title">
+        <header class="panel-head">
+          <h2 id="sessions-title">Exchange floor</h2>
+          <span class="brief-tag" data-sessions-count>—</span>
+        </header>
+        <div class="mkt-grid" data-sessions aria-live="polite">
+          <div class="placeholder">Reading the clocks…</div>
+        </div>
+        <footer class="panel-foot" data-sessions-status>—</footer>
       </section>
 
       <!-- ══════════ SEISMIC ══════════ -->
@@ -177,12 +223,19 @@
         Phase 3 of the <a href="https://aihumane.in/plan/" target="_blank" rel="noopener">master plan</a> is one reasoning engine over all unstructured data. This is the public taste of it.
       </p>
       <p class="foot-sources">
-        Data: USGS · NASA EONET · GDELT · CoinGecko · Frankfurter (ECB) · basemap © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, tiles © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>.
+        Data: USGS · NASA EONET · GDELT (DOC + GEO) · CoinGecko · Frankfurter (ECB) · NOAA SWPC ·
+        basemap © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, tiles © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> ·
+        globe coastlines from <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> (public domain) via world-atlas, ISC licence, © 2012–2019 Michael Bostock.
+        Exchange hours are published session times computed locally; public holidays are not modelled.
+        The instability index measures the volume of instability-related coverage, not a country's actual stability.
         Signals are indicative, minutes-delayed, and not advice.
       </p>
     </footer>
 
     <script src="assets/vendor/leaflet.js" defer></script>
+    <script src="globe.js" defer></script>
+    <script src="exchanges.js" defer></script>
+    <script src="instability.js" defer></script>
     <script src="app.js" defer></script>
     <script>
       if ('serviceWorker' in navigator) {
